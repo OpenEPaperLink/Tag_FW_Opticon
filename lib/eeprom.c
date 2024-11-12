@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include "dma.h"
 
+#include "settings.h"
+
+// port P1 pins
 #define EEPROM_MOSI 6
 #define EEPROM_MISO 7
 #define EEPROM_CLK 5
@@ -94,9 +97,9 @@ void eepromDeepPowerDown(void) {
 }
 
 static void eepromPrvWakeFromPowerdown(void) {
-    #ifdef DEBUGEEPROM
+#ifdef DEBUGEEPROM
     pr("EEPROM: Waking eeprom\n");
-    #endif
+#endif
     eepromPrvSimpleCmd(0xab);
 }
 
@@ -160,7 +163,8 @@ __bit eepromInit(void) __reentrant {
         eepromByte(0x00);
         eepromByte(0x00);
         eepromByte(0x00);
-        switch (eepromByte(0)) {
+        uint8_t c = eepromByte(0);
+        switch (c) {
             case 0xc2:  // old macronix chips
                 valid = true;
                 mOpcodeErz4K = 0x20;
@@ -188,6 +192,29 @@ __bit eepromInit(void) __reentrant {
                     default:
                         valid = false;
                 }
+                break;
+            case 0xC8:  // gigadevice
+                valid = true;
+                mOpcodeErz4K = 0x20;
+                c = eepromByte(0);
+                switch (c) {
+                    case 0x12:
+                        mEepromSize = 0x00080000ul;
+                        break;
+                    case 0x13:
+                        mEepromSize = 0x00100000ul;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            default:
+                pr("Unknown EEPROM type:  0x%02X-", c);
+                mOpcodeErz4K = 0x20;
+                mEepromSize = 0x00080000ul;
+                c = eepromByte(0);
+                pr("0x%02X\n", c);
+                pr("Assuming 512k with 4k sectors\n");
                 break;
         }
         eepromPrvDeselect();

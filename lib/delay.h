@@ -9,6 +9,7 @@ extern void stopWatch(void);
 extern void delay_us(uint16_t len);
 extern void delay_ms(uint16_t len);
 extern uint16_t timerGet(void);
+extern uint32_t sleepTimerGet(void);
 extern void timerDelay(uint16_t);
 
 #define TIMER_TICKS_PER_MS 32

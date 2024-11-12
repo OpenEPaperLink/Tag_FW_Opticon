@@ -6,16 +6,16 @@
 #define FW_VERSION 0x0028          // version number
 #define FW_VERSION_SUFFIX "-INIT"  // suffix, like -RC1 or whatever.
 // #define DEBUGBLOCKS            // uncomment to enable extra debug information on the block transfers
-#define DISABLEWDT  // disables WDT, for testing purposes
+// #define DISABLEWDT  // disables WDT, for testing purposes
 // #define DEBUGPROTO  // debug protocol
 #define DEBUGOTA    // debug OTA FW updates
 // #define DEBUGDRAWING             // debug the drawing part
-// #define DEBUGEPD                 // debug the EPD driver
-// #define DEBUGMAIN                // parts in the main loop
+#define DEBUGEPD                 // debug the EPD driver
+#define DEBUGMAIN                // parts in the main loop
 // #define DEBUGNFC                 // debug NFC functions
 //  #define DEBUGGUI                 // debug GUI drawing (enabled)
 #define DEBUGSETTINGS            // debug settings module (preferences/eeprom)
-//#define DEBUGEEPROM              // eeprom-related debug messages
+// #define DEBUGEEPROM              // eeprom-related debug messages
 #define VALIDATE_IMAGE_MD5  // The firmware can validate the image MD5 before displaying it. This costs about 8mAS (milliamp-second) for a 1.54, 16
 // #define PRINT_LUT                // uncomment if you want the tag to print the LUT for the current temperature bracket
 // #define ENABLE_GPIO_WAKE         // uncomment to enable GPIO wake

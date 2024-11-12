@@ -21,6 +21,8 @@ struct drawItem {
 #define DI_TYPE_EEPROM_1BPP 1
 #define DI_TYPE_EEPROM_2BPP 2
 
+uint8_t reverse_byte(uint8_t b);
+
 //void testDraw();
 void getLine(uint16_t pos, uint8_t color, uint8_t*  buffer) __reentrant;
 void clearDrawList(void);

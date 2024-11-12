@@ -97,6 +97,7 @@ uint8_t channelSelect(uint8_t rounds) {  // returns 0 if no accesspoints were fo
     }
 
     for (uint8_t i = 0; i < rounds; i++) {
+        wdtPet();
         for (uint8_t c = 0; c < sizeof(channelList); c++) {
             if (detectAP(channelList[c])) {
                 if (lastLQI > result[c]) result[c] = lastLQI;
@@ -276,21 +277,23 @@ static void TagChanSearch(void) {
 #define MAC_ADDRESS_LOCATION 0x780C
 
 void main(void) {
+#ifdef HAS_LED
     P1DIR |= (1 << LED);
     P1 |= (1 << LED);
-
+#endif
     powerUp(INIT_BASE | INIT_UART);
 
     pr("Started!\n");
+    startWDT();
 
     powerUp(INIT_EEPROM);
     delay_ms(1);
     initializeProto();
+
     getMacAddress();
     initPowerSaving(INTERVAL_BASE);
     loadSettings();
     powerDown(INIT_EEPROM);
-`
     doVoltageReading();
 
     memtest();
@@ -310,7 +313,9 @@ void main(void) {
 
     if (currentChannel) currentTagMode = TAG_MODE_ASSOCIATED;
 
+#ifdef HAS_LED
     P1 &= ~(1 << LED);
+#endif
 
     showSplashScreen();
 
@@ -322,7 +327,7 @@ void main(void) {
     if (currentChannel) radioSetChannel(currentChannel);
 
     while (1) {
-        // wdtPet();
+        wdtPet();
         switch (currentTagMode) {
             case TAG_MODE_ASSOCIATED:
                 TagAssociated();
@@ -358,7 +363,7 @@ void executeCommand(uint8_t cmd) {
             break;
         case CMD_ERASE_EEPROM_IMAGES:
             powerUp(INIT_EEPROM);
-            //eraseImageBlocks();
+            // eraseImageBlocks();
             powerDown(INIT_EEPROM);
             break;
         case CMD_GET_BATTERY_VOLTAGE:
@@ -426,11 +431,13 @@ void executeCommand(uint8_t cmd) {
             wdtDeviceReset();
             break;
             */
+#ifdef HAS_LED
         case CMD_LED_NOBLINK:
             ledBlink = false;
             break;
         case CMD_LED_BLINK_1:
             ledBlink = true;
             break;
+#endif
     }
 }

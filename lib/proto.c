@@ -29,6 +29,9 @@
 
 #include "ota.h"
 
+#include "wdt.h"
+
+
 // stuff we need to keep track of related to the network/AP
 uint8_t __xdata APmac[8] = {0};
 uint16_t __xdata APsrcPan = 0;
@@ -418,6 +421,7 @@ __xdata uint8_t *getDataBlock(const uint16_t blockSize) __reentrant {
     __xdata uint8_t *blockbuffer = NULL;
 
     while (blockAttempts--) {
+        wdtPet();
 #ifndef DEBUGBLOCKS
         pr("REQ %d ", curBlock.blockId);
 #else
@@ -1048,6 +1052,7 @@ bool validateMD5(uint32_t addr, uint16_t len) __reentrant {
             md5Update(blockbuffer, len);
             len = 0;
         }
+        wdtPet();
     }
     md5Finalize();
     if (xMemEqual((const void *__xdata)ctxdigest, (const void *__xdata) & xferDataInfo.dataVer, 8)) {

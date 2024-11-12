@@ -13,6 +13,8 @@
 #include "userinterface.h"
 #include "powermgt.h"
 
+#include "wdt.h"
+
 #include "settings.h"
 #include "screen.h"
 
@@ -23,13 +25,15 @@
 #define EPD_RESET 0
 #define EPD_DC 4
 #define EPD_CS 7
+#define EPD_CS2 6
 #define EPD_BUSY 1
 
-#define EPD_POWER 1  // P1.1
+// Port P1
+#define EPD_VPP 1  // P1.1
 
-// #define EPD_WIDTH 128
-// #define EPD_HEIGHT 296
-// #define EPD_BPP 2
+#define EPD_POWER_SENSE 0  // P1.0
+#define EPD_POWER_1 2      // P1.2
+#define EPD_POWER_2 3      // P1.3
 
 // known EPD commands
 #define EPD_GET_LUT 0x71
@@ -117,7 +121,7 @@ void epdReset(void) {
     P0 &= ~(1 << 0);
     delay_ms(1);
     P0 |= (1 << 0);
-    waitBusyHigh(0);
+    waitBusyHigh(1000);
 }
 
 uint8_t epdRead(uint8_t reg) {
@@ -152,21 +156,38 @@ void epdEnable(void) {
 
     P0 |= (1 << EPD_RESET);
     P0 |= (1 << EPD_CS);
-    P1 &= ~(1 << EPD_POWER);  // enable EPD power
-
     P0 &= ~((1 << EPD_MISO) | (1 << EPD_BUSY));
     P0DIR &= ~((1 << EPD_MISO) | (1 << EPD_BUSY));
-    P0DIR |= (1 << EPD_MOSI) | (1 << EPD_CLK) | (1 << EPD_RESET) | (1 << EPD_DC) | (1 << EPD_CS);
+    P0DIR |= (1 << EPD_MOSI) | (1 << EPD_CLK) | (1 << EPD_RESET) | (1 << EPD_DC) | (1 << EPD_CS) | (1 << EPD_CS2);
     P0SEL |= (1 << EPD_MOSI) | (1 << EPD_CLK);  // spi enabled on pins
-    P1DIR |= (1 << EPD_POWER);
+    delay_ms(1);
+
+    // VPP as input
+    P1DIR &= ~(1 << EPD_VPP);
+
+    P1 |= (1 << EPD_POWER_1);
+    P1 &= ~(1 << EPD_POWER_2);
+    P1DIR |= (1 << EPD_POWER_1) | (1 << EPD_POWER_2);
+
+    // primary 3v battery mosfet high
+    P1 |= (1 << EPD_POWER_2);
+
+    // shutdown 3v boost converter
+    P1 &= ~(1 << EPD_POWER_1);
+
+    // power battery mosfet
+    P1 &= ~(1 << EPD_POWER_2);
+
+    // start 3v boost converter
+    P1 |= (1 << EPD_POWER_1);
     delay_ms(1);
 }
 
 void epdInit(void) {
 #ifdef DEBUGEPD
-    pr("EPD: Starting INIT\n");
+    pr("EPD: Starting Init\n");
 #endif
-    
+
     uint8_t w_high = (uint8_t)(SCREEN_WIDTH / 256);
     uint8_t w_low = (uint8_t)(SCREEN_WIDTH % 256);
     uint8_t h_high = (uint8_t)(SCREEN_HEIGHT / 256);
@@ -175,6 +196,11 @@ void epdInit(void) {
     epdDeselect();
     epdReset();
     epdReset();
+    epdReset();
+
+    delay_ms(1);
+    P0 |= (1 << EPD_CS2);
+
 #ifdef DEBUGEPD
     pr("LUT=%02X\n", epdRead(EPD_GET_LUT));
     pr("Status=%02X\n", epdRead(EPD_GET_STATUS));
@@ -182,96 +208,117 @@ void epdInit(void) {
     epdRead(EPD_GET_LUT);
     epdRead(EPD_GET_STATUS);
 #endif
-    epdWrite(EPD_POWER_SETTING, 2, 0x07, 0x00);
-    epdWrite(EPD_BOOSTER_SOFTSTART, 7, 0x0F, 0x0A, 0x2F, 0x25, 0x22, 0x2E, 0x21);
-    epdWrite(EPD_POWER_ON, 0x00);
-    waitBusyHigh(1000);
+    epdWrite(EPD_POWER_SETTING, 4, 0x37, 0x00, 0x0b, 0x0b);
+    epdWrite(EPD_BOOSTER_SOFTSTART, 3, 0x2e, 0x2e, 0x2e);
+    epdWrite(EPD_POWER_ON, 0);
+    waitBusyHigh(1500);
     epdWrite(EPD_TEMP_SENSE_ENABLE, 1, 0x00);
-    epdWrite(EPD_TEMP_CALIB, 0);
+    epdWrite(EPD_TEMP_CALIB, 2);
     waitBusyHigh(1000);
-    epdWrite(0x16, 1, 0x00);
-    epdWrite(EPD_PANEL_SETTING, 2, 0x0F, 0x49);
-    epdWrite(0x4D, 1, 0x78);
-    epdWrite(EPD_POWER_OFF_SEQUENCE, 3, 0x10, 0x54, 0x44);
-    epdWrite(EPD_VCOM_INTERVAL, 1, 0x37);
-    epdWrite(EPD_TCON_SETTING, 2, 0x02, 0x02);
+
+    // read temperature data
+    epdSelect();
+    uint8_t __xdata c = epdRecv(0x00);
+    c = epdRecv(0x00);
+    epdDeselect();
+
+    epdWrite(EPD_PANEL_SETTING, 1, 0xCF);
+    epdWrite(0x2A, 2, 0x00, 0x00);
+    epdWrite(0xE5, 1, 0x03);
+    epdWrite(EPD_VCOM_INTERVAL, 1, 0x07);
+    epdWrite(EPD_TCON_SETTING, 1, 0x22);
     epdWrite(EPD_RESOLUTION, 4, w_high, w_low, h_high, h_low);
-    epdWrite(0xE7, 1, 0x1C);
-    epdWrite(EPD_POWER_SAVING, 1, 0x22);
-    epdWrite(0xB4, 1, 0xD0);
-    epdWrite(0xB5, 1, 0x03);
-    epdWrite(0xE9, 1, 0x01);
-    epdWrite(EPD_PLL_CONTROL, 1, 0x08);
+    epdWrite(EPD_PLL_CONTROL, 1, 0x3E);
+    epdWrite(0x82, 1, 0x24);
+
 #ifdef DEBUGEPD
     pr("EPD: Init complete\n");
 #endif
 }
 
 void epdEnterSleep(void) {
-    epdWrite(EPD_VCOM_INTERVAL, 1, 0xC7);
-    epdWrite(EPD_POWER_OFF, 0);
-    epdWrite(EPD_ENTER_SLEEP, 1, 0xA5);
+#ifdef DEBUGEPD
+    pr("EPD: Entering sleep\n");
+#endif
+    epdWrite(0x50, 1, 0xF7);
+    epdWrite(0x02, 0);
     delay_us(30);
-    P1 |= (1 << EPD_POWER);                        // disable EPD power
+    waitBusyHigh(1000);
+    epdWrite(0x07, 1, 0xA5);
+    P0 &= ~(1 << EPD_CS2);
+    // primary 3v battery mosfet high
+    P1 |= (1 << EPD_POWER_2);
+    // shutdown 3v boost converter
+    P1 &= ~(1 << EPD_POWER_1);
+    delay_us(3);
+    P1DIR &= ~((1 << EPD_POWER_1) | (1 << EPD_POWER_2));
+
     P0SEL &= ~((1 << EPD_MOSI) | (1 << EPD_CLK));  // spi disabled on pins
     P0SEL = 0;
     P0DIR = 0;
-    P2INP |= (1 << 5);
+    P0INP |= (1 << EPD_BUSY) | (1 << EPD_MISO);
+    P2INP |= (1 << 5);  //| (1 << 7);
     P0 = 0;
-    P1 |= (1 << EPD_POWER);  // disable EPD power
     delay_us(1);
-    P1DIR &= ~(1 << EPD_POWER);
+
+    // drive VPP low, seems to reduce power
+    P1 &= ~(1 << EPD_VPP);
+    P1DIR |= (1 << EPD_VPP);
+}
+
+unsigned char reverse(unsigned char b) {
+    b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+    b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+    b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+    return b;
+}
+
+inline void sendColor(uint8_t b, uint8_t r) {
+    uint8_t b_out = 0;
+    for (int8_t shift = 3; shift >= 0; shift--) {
+        b_out = 0;
+        if ((r >> 2 * shift) & 0x01) {
+            b_out |= 0x07;
+        } else if ((b >> 2 * shift) & 0x01) {
+            b_out |= 0x03;
+        }
+
+        if ((r >> 2 * shift) & 0x02) {
+            b_out |= 0x70;
+        } else if ((b >> 2 * shift) & 0x02) {
+            b_out |= 0x30;
+        }
+        epdSend(b_out);
+    }
 }
 
 void epdRenderDrawList(void) __reentrant {
+#ifdef DEBUGEPD
     startWatch();
-    epdWrite(EPD_START_TRANSMISSION_DTM, 0);
+#endif
+    epdWrite(0x10, 0);
 
     __xdata uint8_t* black = malloc(SCREEN_WIDTH / 8);
     __xdata uint8_t* red = malloc(SCREEN_WIDTH / 8);
-    __xdata uint8_t* yellow = malloc(SCREEN_WIDTH / 8);
 
     for (uint16_t y = SCREEN_HEIGHT - 1; y <= SCREEN_HEIGHT; y--) {
+        wdtPet();
         dmaMemSet(black, 0x00, SCREEN_WIDTH / 8);
         dmaMemSet(red, 0x00, SCREEN_WIDTH / 8);
-        dmaMemSet(yellow, 0x00, SCREEN_WIDTH / 8);
 
-        // load color information into separate buffers
         getLine(y, 0, black);
         getLine(y, 1, red);
-        getLine(y, 2, yellow);
-        wdtPet();
+
         epdSelect();
-        for (uint16_t x = 0; x < SCREEN_WIDTH;) {
-            // merge color buffers into one
-            uint8_t temp = 0;
-            for (uint8_t shift = 0; shift < 4; shift++) {
-                temp <<= 2;
-                uint8_t curByte = x / 8;
-                uint8_t curMask = (1 << (x % 8));
-                if ((red[curByte] & curMask)) {
-                    temp |= 0x03;
-                } else if (yellow[curByte] & curMask) {
-                    temp |= 0x02;
-                } else if (black[curByte] & curMask) {
-                } else {
-                    temp |= 0x01;
-                }
-                x++;
-            }
-            // send out buffer to EPD
-            U0DBUF = temp;
+        for (uint16_t x = 0; x < SCREEN_WIDTH / 8; x++) {
+            sendColor(reverse(black[x]), reverse(red[x]));
         }
-        while (U0CSR & 0x01);
         epdDeselect();
     }
-
     free(black);
     free(red);
-    free(yellow);
 
-    epdWrite(EPD_DATA_STOP, 1, 0x80);
-
+    epdRead(0x11);
 #ifdef DEBUGEPD
     pr("EPD: Render complete in ");
     stopWatch();
@@ -281,8 +328,10 @@ void epdRenderDrawList(void) __reentrant {
 void epdRefresh(void) {
     epdRenderDrawList();
     clearDrawList();
-    epdWrite(EPD_REFRESH, 1, 0x00);
+    epdWrite(0x13, 0);
     waitBusyRefresh(50000);
+    wdtPet();
+    delay_ms(30);
 }
 
 void epdDisplay(void) {

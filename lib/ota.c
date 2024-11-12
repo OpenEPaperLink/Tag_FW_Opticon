@@ -13,22 +13,21 @@
 
 #define LED 0
 
-
 #define FLASH_BLOCKSIZE 1024
 
 // this func gets copied to RAM, and is used to erase/program the flash from SPI EEPROM
 __xdata uint8_t *srcBuf;
 void RAMFuncProgramFlashFromEEPROM(uint8_t maxPage) __reentrant {
     //__xdata uint8_t *srcBuf = malloc(FLASH_BLOCKSIZE);
-    pr("jumped, malloc'd\n");
     EA = 0;
     SET_WORD(dma[0].dst_h, dma[0].dst_l, srcBuf);
     SET_WORD(dma[3].src_h, dma[3].src_l, srcBuf);
     for (uint8_t page = 0; page < maxPage; page += 1) {
-
+        WDCTL = 0xA8;
+        WDCTL = 0x58;
         // clear config 0/1 IRQ flags
         DMAIRQ &= ~(3);
-        for(uint16_t c = 65535; c>0; c--);
+        for (uint16_t c = 65535; c > 0; c--);
 
         // load channel 0 and 1 configs
         DMAARM |= (1 << 0);
@@ -60,12 +59,11 @@ void RAMFuncProgramFlashFromEEPROM(uint8_t maxPage) __reentrant {
 void RAMFuncEndMarker(void) {}
 
 void programFlashFromEEPROM(uint32_t address, uint8_t pages) __reentrant {
-    //setupDMA();
+    // setupDMA();
     powerUp(INIT_EEPROM);
     void (*RAMFuncP)(uint8_t);
     uint8_t *ram_memory;
     uint16_t RAMFuncSize;
-    pr("starting from address %lu\n", address);
 
     // Calculate the size of the function using the difference between labels
     RAMFuncSize = (uint16_t)RAMFuncEndMarker - (uint16_t)RAMFuncProgramFlashFromEEPROM;
@@ -73,8 +71,6 @@ void programFlashFromEEPROM(uint32_t address, uint8_t pages) __reentrant {
     // Allocate memory for the function in RAM
     srcBuf = malloc(FLASH_BLOCKSIZE);
     ram_memory = (uint8_t *)malloc(RAMFuncSize);
-    if(!ram_memory)pr("FAILED TO ALLOC MEM FOR OTA\n");
-
 
     eepromReadStart(address);
 
@@ -106,11 +102,11 @@ void programFlashFromEEPROM(uint32_t address, uint8_t pages) __reentrant {
     MEMCTR |= 0x08;
 
     // Calculate the address to jump to
-    RAMFuncP = (void (*)(uint8_t ))(0x8000 + ((unsigned int)ram_memory));
+    RAMFuncP = (void (*)(uint8_t))(0x8000 + ((unsigned int)ram_memory));
 
     // Jump to the function in RAM
     RAMFuncP(pages);
     // <- we never get here :(
 }
-void programFlashCompilerSatisfier(void){
+void programFlashCompilerSatisfier(void) {
 }
