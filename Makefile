@@ -86,8 +86,8 @@ size: $(OUTPUT).bin
 	@echo '---------- Memory ----------'
 	@egrep 'available|EXTERNAL|FLASH' $(OUTPUT).mem
 	@cp ${OUTPUT}.ihx out-unpaged.hex
-	@srec_cat -disable-sequence-warning out-unpaged.hex -Intel -crop 0x28000 0x30000 -offset -0x18000 out-unpaged.hex -Intel -crop 0x0000 0x10000  -o fw-$(BUILD).hex -Intel
-	@objcopy -Iihex -Obinary fw-$(BUILD).hex ota-$(BUILD).bin
+	@srec_cat -disable-sequence-warning out-unpaged.hex -Intel -crop 0x28000 0x30000 -offset -0x18000 out-unpaged.hex -Intel -crop 0x0000 0x10000  -o bin/fw-$(BUILD).hex -Intel
+	@objcopy -Iihex -Obinary bin/fw-$(BUILD).hex bin/ota-$(BUILD).bin
 	@python3 scanfilesram.py
 	@rm -rf out-unpaged.hex
 

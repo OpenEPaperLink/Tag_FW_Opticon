@@ -16,5 +16,7 @@ void wdtPet(void) {
 }
 
 void wdtReset(void) {
+    WDCTL |= 0x08;
     WDCTL = 0x0B;
+    while(1);
 }
