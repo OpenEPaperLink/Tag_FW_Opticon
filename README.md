@@ -1,4 +1,7 @@
-# OpenEPaperLink for Opticon 
+# OpenEPaperLink FW for Opticon Tags
+
+<img src="https://github.com/user-attachments/assets/f81bcc18-4759-44eb-9bd8-7b931da35624" width="600">
+
 
 ## Disclaimer
 OpenEPaperLink is an independent, open-source project and is not affiliated with, endorsed by, or otherwise connected to Opticon, its subsidiaries, or any of its products. The use of Opticon's brand name or related product names in this project is for informational purposes only. OpenEPaperLink is developed and maintained by the open-source community and is not officially supported by Opticon.
@@ -8,15 +11,21 @@ Please don't bother them with support questions, they can't help you with questi
 The authors and contributors of OpenEPaperLink and the alternative firmware for Opticon tags cannot be held responsible for any damage, data loss, or other consequences that may result from the use of this alternative firmware. By using this firmware, you acknowledge that you do so at your own risk. OpenEPaperLink is provided "as-is," and no warranty, express or implied, is offered regarding its functionality or compatibility. It is a perpetual 'work-in-progress', and may very well never be finished at all!
 
 ## Introduction
-This is an alternative firmware for a few of the Opticon Electronic Shelf labels. Currently, the EE-293 and EE-214 are supported, with support for the other tags underway. This firmware is 100% compatible with existing OpenEPaperLink accesspoints.
+This is an alternative firmware for a few of the Opticon Electronic Shelf labels. Currently, the following tags are supported:
+* EE-214 BWRY
+* EE-293RY
+* EE-420R
+* EE-750R
 
-<img src="https://github.com/user-attachments/assets/5edd3521-38b8-46dc-bcb0-c1f802bce354" width="400">
-<img src="https://github.com/user-attachments/assets/85532498-8cb9-436c-b724-5d301f5742c5" width="400">
+This firmware is 100% compatible with existing OpenEPaperLink accesspoints.
+
+<img src="https://github.com/user-attachments/assets/5edd3521-38b8-46dc-bcb0-c1f802bce354" width="300">
+<img src="https://github.com/user-attachments/assets/85532498-8cb9-436c-b724-5d301f5742c5" width="300">
 
 ## Specs
 * CC2533 F96 SoC (8051 core, 32 Mhz, 6kB RAM, 96kbyte FLASH) 2.4GHz 802.15.4 radio
 * BWR(Y) Display
-* 1Mbyte EEPROM
+* 1Mbyte/512Kb EEPROM
 
 See the pages on the <a href="https://github.com/OpenEPaperLink/OpenEPaperLink/wiki/Opticon-2.1%E2%80%B3-BWRY-EE%E2%80%90214RY">OpenEPaperLink Wiki</a> for specific tag specs
 
