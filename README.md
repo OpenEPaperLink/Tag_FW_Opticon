@@ -48,3 +48,14 @@ The firmware provides optional debug output on P2.0 at 115200 baud, you'll need 
 
 
 Please note that a stock tag come with a 'lock' on the SoC. It's only possible to erase the chip, not read it out. Flash the appropriate 'hex' file to the SoC, and you're done!
+
+## Changelog
+
+### v0029 - G5 compression ###
+Many thanks to [@Larry Bank](https://github.com/bitbank2) for his awesome work making [compression](https://github.com/bitbank2/bb_epaper/blob/main/src/Group5.cpp) possible on such a limited target. Check out his many useful [repositories!](https://github.com/bitbank2?tab=repositories)
+
+This version introduces optional G5 compression for image transfers. Depending on the image content, the image transfer size can be reduced substantially, especially when no dithering is used in the transferred image.
+
+- G5 image compression now supported (datatypes 0x31 and 0x32)
+- Block transfers are now shortened where possible, reducing battery consumption
+- Fixed a bug where sometimes 7.5" tags would crash during image download
