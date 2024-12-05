@@ -4,7 +4,8 @@
 #include "printf.h"
 #include <stdlib.h>
 #include "dma.h"
-
+#include "delay.h"
+#include "wdt.h"
 #include "settings.h"
 
 // port P1 pins
@@ -42,8 +43,8 @@ void eepromReadStart(uint32_t addr) __reentrant {
     eepromByte(addr & 0xff);
 }
 
-void eepromRead(uint32_t addr, void __xdata *dstP, uint16_t len) __reentrant {
-    uint8_t __xdata *dst = (uint8_t __xdata *)dstP;
+void eepromRead(uint32_t addr, __xdata void *dstP, uint16_t len) __reentrant {
+    __xdata uint8_t *dst = (__xdata uint8_t *)dstP;
 
     eepromPrvSelect();
     eepromByte(0x03);
@@ -74,8 +75,8 @@ static bool eepromPrvBusyWait(void) {
     return true;
 }
 
-static bool eepromWriteLL(uint32_t addr, const void __xdata *srcP, uint16_t len) __reentrant {
-    const uint8_t __xdata *src = (const uint8_t __xdata *)srcP;
+static bool eepromWriteLL(uint32_t addr, const __xdata void *srcP, uint16_t len) __reentrant {
+    const __xdata uint8_t *src = (const __xdata uint8_t *)srcP;
 
     eepromPrvSimpleCmd(0x06);
 
@@ -98,13 +99,16 @@ void eepromDeepPowerDown(void) {
 
 static void eepromPrvWakeFromPowerdown(void) {
 #ifdef DEBUGEEPROM
-    pr("EEPROM: Waking eeprom\n");
+    pr("EEPROM: Waking eeprom...\n");
 #endif
     eepromPrvSimpleCmd(0xab);
+#ifdef DEBUGEEPROM
+    pr("EEPROM: Eeprom Awake\n");
+#endif
 }
 
 // #pragma callee_saves eepromPrvSfdpRead
-static void eepromPrvSfdpRead(uint16_t ofst, uint8_t __xdata *dst, uint8_t len) __reentrant {
+static void eepromPrvSfdpRead(uint16_t ofst, __xdata uint8_t *dst, uint8_t len) __reentrant {
     eepromPrvSelect();
     eepromByte(0x5a);  // cmd
     eepromByte(0);     // addr
@@ -142,9 +146,9 @@ __bit eepromInit(void) __reentrant {
     }
     fullInit = false;
 
-    uint8_t __xdata *buf = malloc(8);
+    __xdata uint8_t *buf = malloc(8);
     uint8_t i, nParamHdrs;
-    uint8_t __xdata *tempBufferE = malloc(320);
+    __xdata uint8_t *tempBufferE = malloc(320);
 
     eepromPrvWakeFromPowerdown();
 
@@ -237,7 +241,7 @@ __bit eepromInit(void) __reentrant {
         if (buf[0] == 0x00 && buf[2] == 0x01 && buf[3] >= 9) {
             uint8_t j;
 
-            eepromPrvSfdpRead(*(uint16_t __xdata *)(buf + 4), tempBufferE, 9 * 4);
+            eepromPrvSfdpRead(*(__xdata uint16_t *)(buf + 4), tempBufferE, 9 * 4);
             if ((tempBufferE[0] & 3) != 1) {
 #ifdef DEBUGEEPROM
                 pr("SFDP: no 4K ERZ\n");
@@ -340,8 +344,8 @@ __bit eepromInit(void) __reentrant {
     return false;
 }
 
-bool eepromWrite(uint32_t addr, const void __xdata *srcP, uint16_t len) __reentrant {
-    const uint8_t __xdata *src = (const uint8_t __xdata *)srcP;
+bool eepromWrite(uint32_t addr, const __xdata void *srcP, uint16_t len) __reentrant {
+    const __xdata uint8_t *src = (const __xdata uint8_t *)srcP;
 
     while (len) {
         uint16_t lenNow = EEPROM_WRITE_PAGE_SZ - (addr & (EEPROM_WRITE_PAGE_SZ - 1));
@@ -388,8 +392,9 @@ bool eepromErase(uint32_t addr, uint16_t nSec) __reentrant {
         eepromByte(addr >> 16);
         eepromByte(addr >> 8);
         eepromByte(addr);
+        wdtPet();
         eepromPrvDeselect();
-
+        wdtPet();
         if (!eepromPrvBusyWait()) {
             pr("EEPROM: timeout?");
             return false;
@@ -397,7 +402,6 @@ bool eepromErase(uint32_t addr, uint16_t nSec) __reentrant {
 
         addr += mathPrvMul16x8(EEPROM_ERZ_SECTOR_SZ, now);
     }
-
     return true;
 }
 

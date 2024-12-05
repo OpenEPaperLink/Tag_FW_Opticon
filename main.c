@@ -299,6 +299,7 @@ void main(void) {
     memtest();
 
     EA = 1;
+    wdtPet();
 
     tagSettings.fastBootCapabilities = capabilities;
 

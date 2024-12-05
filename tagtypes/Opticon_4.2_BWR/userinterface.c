@@ -59,12 +59,12 @@ void showSplashScreen(void) {
     epdPrintf("Tag MAC: %s", mactemp);
 
     epdDrawImage(opticon);
-    epdSetPos(102, 4, 0);
+    epdSetPos(8, 4, 0);
     epdSetScale(2);
     epdSetColor(0);
 
 
-    if (!currentChannel) {
+    if (currentChannel) {
         epdPrintBegin();
         epdSetPos(100, 140, 0);
         epdSetScale(2);

@@ -10,7 +10,7 @@ DEVICE = CC2533
 F_CPU = 32000000
 
 # ---------------------------------------------------------------------
-BUILD		?= Opticon_2.9_BWRY
+BUILD		?= Opticon_2.2_BWRY
 
 
 OUTPUT_NAME = $(BUILD)
@@ -18,7 +18,7 @@ OUTPUT_NAME = $(BUILD)
 
 XRAM_LOC = 0x0000
 XRAM_SIZE = 0x1700 #0x1800 (removed last 256 bytes! Last 0x100 is idata mapped into xmem, or something)
-HEAP_SIZE = 5275 # maximize me!
+HEAP_SIZE = 5265 # maximize me!
 
 ROOT_DIR = .
 BUILD_DIR = .build
@@ -45,6 +45,7 @@ SOURCES = main.c
 
 SOURCES += tagtypes/$(BUILD)/screen.c
 SOURCES += tagtypes/$(BUILD)/userinterface.c
+SOURCES += lib/g5/g5dec.c
 
 
 OBJECTS = $(patsubst %.c,$(BUILD_DIR)/%.rel,$(SOURCES))

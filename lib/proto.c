@@ -31,6 +31,8 @@
 
 #include "wdt.h"
 
+#include "screen.h"
+#include "g5/g5dec.h"
 
 // stuff we need to keep track of related to the network/AP
 uint8_t __xdata APmac[8] = {0};
@@ -62,8 +64,8 @@ static uint32_t __xdata markerValid = EEPROM_IMG_VALID;
 
 extern void executeCommand(uint8_t cmd);
 
-static uint8_t __xdata getPacketType(const void *__xdata buffer) {
-    const struct MacFcs *__xdata fcs = buffer;
+static uint8_t __xdata getPacketType(const __xdata void *buffer) {
+    const __xdata struct MacFcs *fcs = buffer;
     if ((fcs->frameType == 1) && (fcs->destAddrType == 2) && (fcs->srcAddrType == 3) && (fcs->panIdCompressed == 0)) {
         // broadcast frame
         uint8_t __xdata type = ((uint8_t *)buffer)[sizeof(struct MacFrameBcast)];
@@ -75,8 +77,8 @@ static uint8_t __xdata getPacketType(const void *__xdata buffer) {
     }
     return 0;
 }
-static bool pktIsUnicast(const void *__xdata buffer) {
-    const struct MacFcs *__xdata fcs = buffer;
+static bool pktIsUnicast(const __xdata void *buffer) {
+    const __xdata struct MacFcs *fcs = buffer;
     if ((fcs->frameType == 1) && (fcs->destAddrType == 2) && (fcs->srcAddrType == 3) && (fcs->panIdCompressed == 0)) {
         return false;
     } else if ((fcs->frameType == 1) && (fcs->destAddrType == 3) && (fcs->srcAddrType == 3) && (fcs->panIdCompressed == 1)) {
@@ -103,8 +105,8 @@ static void addCRC(void *p, const uint8_t len) {
 }
 
 static void sendPing(void) {
-    __xdata uint8_t *__xdata outBuffer = malloc(32);
-    struct MacFrameBcast __xdata *txframe = (struct MacFrameBcast *)(outBuffer + 1);
+    __xdata uint8_t *outBuffer = malloc(32);
+    __xdata struct MacFrameBcast *txframe = (struct MacFrameBcast *)(outBuffer + 1);
     memset(outBuffer, 0, sizeof(struct MacFrameBcast) + 2 + 4);
     outBuffer[0] = sizeof(struct MacFrameBcast) + 1 + 2;
     outBuffer[sizeof(struct MacFrameBcast) + 1] = PKT_PING;
@@ -135,7 +137,7 @@ uint8_t detectAP(const uint8_t channel) __reentrant {
             if (ret > 1) {
                 if ((inBuffer[sizeof(struct MacFrameNormal) + 1] == channel) && (getPacketType(inBuffer) == PKT_PONG)) {
                     if (pktIsUnicast(inBuffer)) {
-                        static struct MacFrameNormal *__xdata f;
+                        static __xdata struct MacFrameNormal *f;
                         f = (struct MacFrameNormal *)inBuffer;
                         memcpy(APmac, f->src, 8);
                         APsrcPan = f->pan;
@@ -221,7 +223,7 @@ __xdata struct AvailDataInfo *getAvailDataInfo(void) __reentrant {
     return NULL;
 }
 
-static bool processBlockPart(const struct blockPart *bp, __xdata uint8_t *blockbuffer) __reentrant {
+static bool processBlockPart(const __xdata struct blockPart *bp, __xdata uint8_t *blockbuffer) __reentrant {
     uint16_t start = bp->blockPart * BLOCK_PART_DATA_SIZE;
     uint16_t size = BLOCK_PART_DATA_SIZE;
     // validate if it's okay to copy data
@@ -248,15 +250,25 @@ static bool blockRxLoop(const uint16_t timeout, __xdata uint8_t *blockbuffer) __
     uint16_t t;
     bool success = false;
     __xdata uint8_t *inBuffer = malloc(128);
+    bool blockComplete = false;
     radioRxEnable(true);
     t = timerGet() + (TIMER_TICKS_PER_MS * (timeout + 20));
-    while ((uint16_t)(timerGet() - t) > 0x8000) {
+    while (((uint16_t)(timerGet() - t) > 0x8000) && (blockComplete != true)) {
         // while (timerGet() < t) {
         int8_t ret = radioRx(inBuffer);
         if (ret > 1) {
             if (getPacketType(inBuffer) == PKT_BLOCK_PART) {
-                struct blockPart *bp = (struct blockPart *)(inBuffer + sizeof(struct MacFrameNormal) + 1);
+                __xdata struct blockPart *bp = (struct blockPart *)(inBuffer + sizeof(struct MacFrameNormal) + 1);
                 success = processBlockPart(bp, blockbuffer);
+            } else {
+                blockComplete = true;
+                wdtPet();
+                for (uint8_t c1 = 0; c1 < BLOCK_MAX_PARTS; c1++) {
+                    if (curBlock.requestedParts[c1 / 8] & (1 << (c1 % 8))) {
+                        blockComplete = false;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -265,7 +277,7 @@ static bool blockRxLoop(const uint16_t timeout, __xdata uint8_t *blockbuffer) __
     free(inBuffer);
     return success;
 }
-static __xdata struct blockRequestAck *__xdata continueToRX(void) {
+static __xdata struct blockRequestAck *continueToRX(void) {
     __xdata struct blockRequestAck *blockAck = malloc(sizeof(struct blockRequestAck));
     blockAck->pleaseWaitMs = 0;
     return blockAck;
@@ -300,7 +312,7 @@ static void sendBlockRequest(bool requestPartialBlock) __reentrant {
     free(outBuffer);
 }
 static __xdata struct blockRequestAck *performBlockRequest(bool requestPartialBlock) __reentrant {
-    uint8_t __xdata *inBuffer = malloc(128);
+    __xdata uint8_t *inBuffer = malloc(128);
     static uint16_t __xdata t;
     radioRxEnable(true);
     for (uint8_t c = 0; c < 10; c++) {  // was 30 attempts
@@ -462,6 +474,7 @@ __xdata uint8_t *getDataBlock(const uint16_t blockSize) __reentrant {
             // } else {
             powerDown(INIT_RADIO);
             doSleep(ack->pleaseWaitMs + 40);
+            wdtPet();
             powerUp(INIT_RADIO);
             radioRxEnable(true);
             //}
@@ -564,10 +577,152 @@ static uint8_t findSlotVer(const __xdata uint8_t *ver) __reentrant {
     return 0xFF;
 }
 
+static uint8_t findNextSlot(const __xdata struct AvailDataInfo *avail) {
+    // new transfer
+    powerUp(INIT_EEPROM);
+
+    // go to the next image slot
+    uint8_t startingSlot = nextImgSlot;
+#pragma disable_warning 110
+    // if we encounter a special image type, start looking from slot 0, to prevent the image being overwritten when we do an OTA update
+    if (avail->dataTypeArgument & 0xFC != 0x00) {
+        startingSlot = 0;
+    }
+#pragma disable_warning 110
+    while (1) {
+        nextImgSlot++;
+        if (nextImgSlot >= imgSlots) nextImgSlot = 0;
+
+        __xdata struct EepromImageHeader *eih = malloc(sizeof(struct EepromImageHeader));
+        eepromRead(getAddressForSlot(nextImgSlot), eih, sizeof(struct EepromImageHeader));
+        // check if the marker is indeed valid
+        if (xMemEqual4(&eih->validMarker, &markerValid)) {
+            struct imageDataTypeArgStruct *eepromDataArgument = (struct imageDataTypeArgStruct *)&(eih->argument);
+            // normal type, we can overwrite this
+            if (eepromDataArgument->specialType == 0x00) {
+                free(eih);
+                break;
+            }
+            // can't overwrite, but we should free the eeprom header anyway
+            free(eih);
+        } else {
+            // bullshit marker, so safe to overwrite
+            free(eih);
+            break;
+        }
+    }
+
+    xferImgSlot = nextImgSlot;
+
+    uint8_t attempt = 5;
+    while (attempt--) {
+        if (eepromErase(getAddressForSlot(xferImgSlot), EEPROM_IMG_EACH / EEPROM_ERZ_SECTOR_SZ)) goto eraseSuccess;
+    }
+eepromFail:
+    powerDown(INIT_RADIO);
+    pr("PROTO: EEPROM fail?\n");
+    powerDown(INIT_EEPROM);
+    doSleep(-1);
+    // wdtDeviceReset();
+eraseSuccess:
+    powerDown(INIT_EEPROM);
+
+    return nextImgSlot;
+}
+
+static uint8_t decompressImageG5(const __xdata struct AvailDataInfo *avail, uint8_t compressedImgSlot) __reentrant {
+    // find next slot to decompress image into
+    uint8_t decompressedSlot = findNextSlot(avail);
+#ifdef DEBUGG5DEC
+    pr("G5: reading data from slot %d\n", compressedImgSlot);
+#endif
+    powerUp(INIT_EEPROM);
+
+#define READBUFFERSIZE 1024UL
+#define MIN_REMAINING_READBUFFER 256UL
+    uint32_t readCurOffset = getAddressForSlot(compressedImgSlot) + sizeof(struct EepromImageHeader);
+
+    __xdata uint8_t *readbuffer = malloc(READBUFFERSIZE);
+    __xdata uint8_t *writebuffer = malloc((SCREEN_WIDTH / 8) + 1);  // hmm.
+
+    // start reading the first block
+    eepromRead(readCurOffset, readbuffer, READBUFFERSIZE);
+
+    uint16_t max_y = SCREEN_HEIGHT;
+    if (avail->dataType == DATATYPE_IMG_G5_2BPP) max_y *= 2;  // we use double the height for the second color layer
+
+    __xdata G5DECIMAGE *g5dec = (__xdata G5DECIMAGE *)malloc(sizeof(G5DECIMAGE));  // max about 2600 bytes
+    if (!g5dec) {
+#ifdef DEBUGG5DEC
+        pr("G5: Failed to allocate g5 struct\n");
+#endif
+    }
+
+    int rc = g5_decode_init(g5dec, SCREEN_WIDTH, max_y, readbuffer, READBUFFERSIZE);  //(int)avail->dataSize);
+    if (rc != G5_SUCCESS) {
+#ifdef DEBUGG5DEC
+        pr("G5: Failed to init: Error %d\n", rc);
+#endif
+    }
+
+    for (uint16_t y = 0; y < max_y; y++) {
+        rc = g5_decode_line(g5dec, writebuffer);
+        wdtPet();
+        // check for highwater, load a new block if we're near the end of the buffer
+        if (((uint32_t)g5dec->pBuf) > ((uint32_t)readbuffer + (READBUFFERSIZE - MIN_REMAINING_READBUFFER))) {
+#ifdef DEBUGG5DEC
+            pr("G5: Loading new compressed block\n");
+#endif
+            uint16_t curBlockReadOffset = g5dec->pBuf - readbuffer;
+            readCurOffset += curBlockReadOffset;
+            g5dec->pBuf = readbuffer;
+            // load new block
+
+            eepromRead(readCurOffset, readbuffer, READBUFFERSIZE);
+        }
+        eepromWrite(getAddressForSlot(decompressedSlot) + sizeof(struct EepromImageHeader) + ((SCREEN_WIDTH / 8) * y), writebuffer, SCREEN_WIDTH / 8);
+        if ((rc != G5_SUCCESS) && (rc != G5_DECODE_COMPLETE)) {
+#ifdef DEBUGG5DEC
+            pr("G5: Error at line y=%d\n", y);
+#endif
+            break;
+        }
+    }
+#ifdef DEBUGG5DEC
+    pr("G5: Last block status code %d\n", rc);
+#endif
+    free(readbuffer);
+    free(writebuffer);
+    free(g5dec);
+
+    // mark slot with compressed dataver, corrected datatype
+    __xdata struct EepromImageHeader *eih = (__xdata struct EepromImageHeader *)malloc(sizeof(struct EepromImageHeader));
+    xMemCopy8(&eih->version, &avail->dataVer);
+    eih->validMarker = EEPROM_IMG_VALID;
+    eih->id = ++curHighSlotId;
+    eih->size = avail->dataSize;  // THIS SHOULD BE UPDATED TO THE DECOMPRESSED SIZE! (but we don't really use this stuff anyway)
+    if (avail->dataType == DATATYPE_IMG_G5_1BPP) {
+        eih->dataType = DATATYPE_IMG_RAW_1BPP;
+    } else {
+        eih->dataType = DATATYPE_IMG_RAW_2BPP;
+    }
+    eih->argument = avail->dataTypeArgument;
+    eepromWrite(getAddressForSlot(decompressedSlot), eih, sizeof(struct EepromImageHeader));
+    free(eih);
+
+    // invalidate slot with compressed data
+    __xdata uint8_t *temp = malloc(16);
+    memset(temp, 0x00, 16);
+    eepromWrite(getAddressForSlot(compressedImgSlot), temp, 16);
+    free(temp);
+
+    return decompressedSlot;
+}
+
 // making this reentrant saves one byte of idata...
 uint8_t __xdata findSlotDataTypeArg(uint8_t arg) __reentrant {
     arg &= (0xF8);  // unmatch with the 'preload' bit and LUT bits
-    struct EepromImageHeader __xdata *eih = malloc(sizeof(struct EepromImageHeader));
+    __xdata struct EepromImageHeader *eih = malloc(sizeof(struct EepromImageHeader));
     for (uint8_t c = 0; c < imgSlots; c++) {
         eepromRead(getAddressForSlot(c), eih, sizeof(struct EepromImageHeader));
         if (xMemEqual4(&eih->validMarker, &markerValid)) {
@@ -581,14 +736,14 @@ uint8_t __xdata findSlotDataTypeArg(uint8_t arg) __reentrant {
     return 0xFF;
 }
 uint8_t getEepromImageDataArgument(const uint8_t slot) {
-    struct EepromImageHeader __xdata *eih = malloc(sizeof(struct EepromImageHeader));
+    __xdata struct EepromImageHeader *eih = malloc(sizeof(struct EepromImageHeader));
     eepromRead(getAddressForSlot(slot), eih, sizeof(struct EepromImageHeader));
     uint8_t __xdata ret = eih->argument;
     free(eih);
     return ret;
 }
 uint8_t __xdata findNextSlideshowImage(uint8_t start) __reentrant {
-    struct EepromImageHeader __xdata *eih = malloc(sizeof(struct EepromImageHeader));
+    __xdata struct EepromImageHeader *eih = malloc(sizeof(struct EepromImageHeader));
     uint8_t c = start;
     while (1) {
         c++;
@@ -655,7 +810,7 @@ static bool downloadFWUpdate(const __xdata struct AvailDataInfo *avail) __reentr
     static uint16_t __xdata dataRequestSize = 0;
     static uint16_t __xdata otaSize = 0;
     // check if we already started the transfer of this information & haven't completed it
-    if (xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8) && xferDataInfo.dataSize) {
+    if (xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)&xferDataInfo.dataVer, 8) && xferDataInfo.dataSize) {
         // looks like we did. We'll carry on where we left off.
     } else {
 #if defined(DEBUGOTA)
@@ -713,7 +868,7 @@ static bool downloadFWUpdate(const __xdata struct AvailDataInfo *avail) __reentr
 static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail) __reentrant {
     uint16_t imageSize = 0;
     //  check if we already started the transfer of this information & haven't completed it
-    if (xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8) &&
+    if (xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)&xferDataInfo.dataVer, 8) &&
         (xferDataInfo.dataTypeArgument == avail->dataTypeArgument) &&
         xferDataInfo.dataSize) {
 // looks like we did. We'll carry on where we left off.
@@ -722,53 +877,7 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
 #endif
     } else {
         // new transfer
-        powerUp(INIT_EEPROM);
-
-        // go to the next image slot
-        uint8_t startingSlot = nextImgSlot;
-#pragma disable_warning 110
-        // if we encounter a special image type, start looking from slot 0, to prevent the image being overwritten when we do an OTA update
-        if (avail->dataTypeArgument & 0xFC != 0x00) {
-            startingSlot = 0;
-        }
-#pragma disable_warning 110
-        while (1) {
-            nextImgSlot++;
-            if (nextImgSlot >= imgSlots) nextImgSlot = 0;
-
-            __xdata struct EepromImageHeader *eih = malloc(sizeof(struct EepromImageHeader));
-            eepromRead(getAddressForSlot(nextImgSlot), eih, sizeof(struct EepromImageHeader));
-            // check if the marker is indeed valid
-            if (xMemEqual4(&eih->validMarker, &markerValid)) {
-                struct imageDataTypeArgStruct *eepromDataArgument = (struct imageDataTypeArgStruct *)&(eih->argument);
-                // normal type, we can overwrite this
-                if (eepromDataArgument->specialType == 0x00) {
-                    free(eih);
-                    break;
-                }
-                // can't overwrite, but we should free the eeprom header anyway
-                free(eih);
-            } else {
-                // bullshit marker, so safe to overwrite
-                free(eih);
-                break;
-            }
-        }
-
-        xferImgSlot = nextImgSlot;
-
-        uint8_t attempt = 5;
-        while (attempt--) {
-            if (eepromErase(getAddressForSlot(xferImgSlot), EEPROM_IMG_EACH / EEPROM_ERZ_SECTOR_SZ)) goto eraseSuccess;
-        }
-    eepromFail:
-        powerDown(INIT_RADIO);
-        pr("PROTO: EEPROM fail?\n");
-        powerDown(INIT_EEPROM);
-        doSleep(-1);
-        // wdtDeviceReset();
-    eraseSuccess:
-        powerDown(INIT_EEPROM);
+        xferImgSlot = findNextSlot(avail);
 #ifdef DEBUGPROTO
         pr("PROTO: new download, writing to slot %d\n", xferImgSlot);
 #endif
@@ -817,9 +926,10 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
         powerDown(INIT_EEPROM);
         return false;
     }
+    wdtPet();
     // #endif
     //  borrow the blockbuffer temporarily
-    struct EepromImageHeader __xdata *eih = malloc(sizeof(struct EepromImageHeader));
+    __xdata struct EepromImageHeader *eih = malloc(sizeof(struct EepromImageHeader));
     xMemCopy8(&eih->version, &xferDataInfo.dataVer);
     eih->validMarker = EEPROM_IMG_VALID;
     eih->id = ++curHighSlotId;
@@ -833,6 +943,11 @@ static bool downloadImageDataToEEPROM(const __xdata struct AvailDataInfo *avail)
     eepromWrite(getAddressForSlot(xferImgSlot), eih, sizeof(struct EepromImageHeader));
     free(eih);
     powerDown(INIT_EEPROM);
+
+    // check if we need to decompress a G5-compressed image
+    if ((xferDataInfo.dataType == DATATYPE_IMG_G5_1BPP) || (xferDataInfo.dataType == DATATYPE_IMG_G5_2BPP)) {
+        xferImgSlot = decompressImageG5(&xferDataInfo, xferImgSlot);
+    }
 
     return true;
 }
@@ -886,7 +1001,7 @@ inline bool processImageDataAvail(__xdata struct AvailDataInfo *avail) __reentra
 
     } else {
         // check if we're currently displaying this data payload
-        if (xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata)curDispDataVer, 8)) {
+        if (xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)curDispDataVer, 8)) {
             // currently displayed, not doing anything except for sending an XFC
 #ifdef DEBUGPROTO
             pr("PROTO: currently shown image, send xfc\n");
@@ -954,11 +1069,22 @@ inline bool processImageDataAvail(__xdata struct AvailDataInfo *avail) __reentra
 }
 
 bool processAvailDataInfo(__xdata struct AvailDataInfo *avail) __reentrant {
+    if (((avail->dataType == DATATYPE_FW_UPDATE) && (avail->dataSize > 65536)) || ((avail->dataType != DATATYPE_FW_UPDATE) && (avail->dataSize > EEPROM_IMG_EACH))) {
+        powerUp(INIT_RADIO);
+        sendXferComplete();
+        powerDown(INIT_RADIO);
+#ifdef DEBUGPROTO
+        pr("PROTO: availData too large\n");
+#endif
+        return true;
+    }
     switch (avail->dataType) {
         case DATATYPE_IMG_BMP:
         case DATATYPE_IMG_DIFF:
         case DATATYPE_IMG_RAW_1BPP:
         case DATATYPE_IMG_RAW_2BPP:
+        case DATATYPE_IMG_G5_1BPP:
+        case DATATYPE_IMG_G5_2BPP:
             return processImageDataAvail(avail);
             break;
         case DATATYPE_FW_UPDATE:
@@ -994,7 +1120,7 @@ bool processAvailDataInfo(__xdata struct AvailDataInfo *avail) __reentrant {
             }
             break;
         case DATATYPE_TAG_CONFIG_DATA:
-            if (xferDataInfo.dataSize == 0 && xMemEqual((const void *__xdata) & avail->dataVer, (const void *__xdata) & xferDataInfo.dataVer, 8)) {
+            if (xferDataInfo.dataSize == 0 && xMemEqual((const __xdata void *)&avail->dataVer, (const __xdata void *)&xferDataInfo.dataVer, 8)) {
 #ifdef DEBUGPROTO
                 pr("PROTO: this was the same as the last transfer, disregard\n");
 #endif
@@ -1055,7 +1181,7 @@ bool validateMD5(uint32_t addr, uint16_t len) __reentrant {
         wdtPet();
     }
     md5Finalize();
-    if (xMemEqual((const void *__xdata)ctxdigest, (const void *__xdata) & xferDataInfo.dataVer, 8)) {
+    if (xMemEqual((const __xdata void *)ctxdigest, (const __xdata void *)&xferDataInfo.dataVer, 8)) {
 #ifdef DEBUGPROTO
         pr("PROTO: MD5 pass!\n");
 #endif
@@ -1074,8 +1200,8 @@ bool validateFWMagic(void) {
     MEMCTR = 0;  // map flash page 1 into 0x8000
     __xdata uint8_t *blockbuffer = malloc(256);
     eepromRead(eeSize - OTA_UPDATE_SIZE, blockbuffer, 256);
-    if (xMemEqual((const void __xdata *)((uintptr_t)0x808b),
-                  (const void __xdata *)(blockbuffer + 0x8b), 8)) {
+    if (xMemEqual((const __xdata void *)((uintptr_t)0x808b),
+                  (const __xdata void *)(blockbuffer + 0x8b), 8)) {
 #ifdef DEBUGOTA
         pr("OTA: magic number matches! good fw\n");
 #endif

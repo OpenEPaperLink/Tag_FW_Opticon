@@ -251,7 +251,7 @@ void doVoltageReading(void) {
             batteryVoltage = 3001;
             break;
     }
-    if(batteryVoltage<2800){
+    if (batteryVoltage < 2800) {
         lowBattery = true;
     } else {
         lowBattery = false;
@@ -283,6 +283,9 @@ void addAverageValue(void) {
 }
 
 uint16_t getNextSleep(void) {
+#ifdef DEBUGPROTO
+    return 5;
+#endif
     uint16_t avg = 0;
     for (uint8_t c = 0; c < POWER_SAVING_SMOOTHING; c++) {
         avg += dataReqAttemptArr[c];

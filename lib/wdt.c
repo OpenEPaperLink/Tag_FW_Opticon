@@ -1,6 +1,8 @@
 #include "hal.h"
 #include "softuart.h"
 #include "delay.h"
+#include "settings.h"
+
 
 void startWDT(void) {
 #ifndef DISABLEWDT

@@ -15,6 +15,7 @@
 
 #include "settings.h"
 #include "screen.h"
+#include "wdt.h"
 
 // Port P0
 #define EPD_MISO 2
