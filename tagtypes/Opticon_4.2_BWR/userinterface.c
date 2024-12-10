@@ -43,11 +43,10 @@ void showSplashScreen(void) {
     epdSetColor(1);
     epdPrintf("R");
 
-
     epdPrintBegin();
     epdSetPos(330, 50, 0);
     epdSetColor(0);
-    epdPrintf("v%02X%s",FW_VERSION, FW_VERSION_SUFFIX);
+    epdPrintf("v%02X%s", FW_VERSION, FW_VERSION_SUFFIX);
 
     epdPrintBegin();
     epdSetPos(30, 50, 0);
@@ -62,7 +61,6 @@ void showSplashScreen(void) {
     epdSetPos(8, 4, 0);
     epdSetScale(2);
     epdSetColor(0);
-
 
     if (currentChannel) {
         epdPrintBegin();
@@ -108,6 +106,8 @@ void addOverlay(void) {
         epdSetScale(1);
         epdSetColor(0);
         lowBatteryShown = true;
+    } else {
+        lowBatteryShown = false;
     }
 
     if (!currentChannel) {
@@ -121,9 +121,11 @@ void addOverlay(void) {
         epdSetScale(1);
         epdSetColor(1);
         noAPShown = true;
+    } else {
+        noAPShown = false;
     }
 }
 
 void showLongTermSleep(void) {
-        epdDisplay();
+    epdDisplay();
 }

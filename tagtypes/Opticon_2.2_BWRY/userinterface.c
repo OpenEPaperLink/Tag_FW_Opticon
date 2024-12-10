@@ -105,6 +105,8 @@ void addOverlay(void) {
         epdSetScale(1);
         epdSetColor(0);
         lowBatteryShown = true;
+    } else {
+        lowBatteryShown = false;
     }
 
     if (!currentChannel) {
@@ -118,9 +120,11 @@ void addOverlay(void) {
         epdSetScale(1);
         epdSetColor(1);
         noAPShown = true;
+    } else {
+        noAPShown = false;
     }
 }
 
 void showLongTermSleep(void) {
-        epdDisplay();
+    epdDisplay();
 }
